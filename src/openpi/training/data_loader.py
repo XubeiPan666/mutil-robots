@@ -160,6 +160,23 @@ class FakeDataset(Dataset):
         return self._num_samples
 
 
+
+class _ImageAwareLeRobotDataset(lerobot_dataset.LeRobotDataset):
+    """Restore image types declared in the LeRobot metadata."""
+
+    def load_hf_dataset(self):
+        from datasets import Image
+
+        dataset = super().load_hf_dataset()
+        for name, feature in self.meta.features.items():
+            if feature.get("dtype") == "image":
+                if name not in dataset.features:
+                    raise ValueError(f"Missing image column: {name}")
+                if not isinstance(dataset.features[name], Image):
+                    dataset = dataset.cast_column(name, Image())
+        return dataset
+
+
 def create_torch_dataset(
     data_config: _config.DataConfig, action_horizon: int, model_config: _model.BaseModelConfig
 ) -> Dataset:
@@ -179,7 +196,7 @@ def create_torch_dataset(
     )
     if data_config.video_tolerance_s is not None:
         lerobot_kwargs["tolerance_s"] = data_config.video_tolerance_s
-    dataset = lerobot_dataset.LeRobotDataset(data_config.repo_id, **lerobot_kwargs)
+    dataset = _ImageAwareLeRobotDataset(data_config.repo_id, **lerobot_kwargs)
 
     if data_config.prompt_from_task:
         dataset = TransformedDataset(dataset, [_transforms.PromptFromLeRobotTask(dataset_meta.tasks)])
