@@ -536,7 +536,7 @@ class ModelTransformFactory(GroupFactory):
             case _model.ModelType.PI05:
                 assert isinstance(
                     model_config,
-                    (pi0_config.Pi0Config, Pi0MultiAgentAttnConfig, Pi05TwinVLAConfig),
+                    (pi0_config.Pi0Config, Pi0MultiAgentAttnConfig),
                 )
                 return _transforms.Group(
                     inputs=[

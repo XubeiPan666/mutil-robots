@@ -80,8 +80,12 @@ def check_config(root):
     require(type(cfg.data.model_transforms) is config.ModelTransformFactory,
             "Expected standard Pi0.5 tokenization without SkillLoRA labels")
     settings = check_pair(cfg, reference, root, os.environ["FUTURE_PI05_PARAMS"])
+    # Exercise the actual factory too: comparing its type alone misses broken
+    # names in __call__ until the GPU training process starts.
+    cfg.data.create(cfg.assets_dirs, cfg.model)
     print(json.dumps({"config": CONFIG, "reference_config": REFERENCE, "settings": settings,
                       "normalization": "Reuse six-task stats: equivalent state/action transforms",
+                      "data_config_creation": "passed",
                       "save_interval_cli": 5000, "keep_period_cli": 5000}, indent=2))
 
 
