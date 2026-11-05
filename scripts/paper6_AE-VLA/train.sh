@@ -15,6 +15,8 @@ export PYTHONNOUSERSITE=1
 unset JAX_PLATFORMS
 # Keep Slurm's CUDA_VISIBLE_DEVICES unchanged.
 cd "$PROJECT_WS/code/mutil-robots"
+AEVLA_SCRIPTS=scripts/paper6
+if [[ -d scripts/paper6_AE-VLA ]]; then AEVLA_SCRIPTS=scripts/paper6_AE-VLA; fi
 
 export FUTURE_DATA_ROOT="$PROJECT_WS/datasets/paper6"
 export FUTURE_DATASET_DIR="$FUTURE_DATA_ROOT/multi_task_combined"
@@ -46,7 +48,7 @@ git status --short > "$RUN_DIR/git_status.txt"
 cp "$FUTURE_DATASET_DIR/paper6_manifest.json" "$RUN_DIR/paper6_manifest.json"
 sha256sum "$FUTURE_DATASET_DIR/norm_stats.json" > "$RUN_DIR/norm_stats.sha256"
 
-JAX_PLATFORMS=cpu uv run --frozen python scripts/paper6/check_training.py \
+JAX_PLATFORMS=cpu uv run --frozen python "$AEVLA_SCRIPTS/check_training.py" \
   --dataset "$FUTURE_DATASET_DIR" --check-config | tee "$RUN_DIR/preflight.log"
 nvidia-smi
 uv run --frozen python - <<'PY'

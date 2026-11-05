@@ -9,6 +9,8 @@ import unittest
 
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts/paper6"
+if SCRIPTS.with_name("paper6_AE-VLA").is_dir():
+    SCRIPTS = SCRIPTS.with_name("paper6_AE-VLA")
 sys.path.insert(0, str(SCRIPTS))
 SPEC = importlib.util.spec_from_file_location("paper6_check", SCRIPTS / "check_training.py")
 MODULE = importlib.util.module_from_spec(SPEC)

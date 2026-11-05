@@ -7,6 +7,21 @@ stack cubes, 100 each, 600 total. It does not prove that these public trajectori
 are byte-for-byte the authors' original 600 demonstrations, or guarantee paper
 metrics. Source revision: `447112d1c5b2ec10f7ad34ed438532c062bc51bc`.
 
+## Script directory rename
+
+The user may rename `scripts/paper6` to `scripts/paper6_AE-VLA` with `git mv`.
+The launchers and tests support both names. From the repository root, set this
+variable before copying the commands below:
+
+```bash
+AEVLA_SCRIPTS=scripts/paper6
+if [ -d scripts/paper6_AE-VLA ]; then AEVLA_SCRIPTS=scripts/paper6_AE-VLA; fi
+```
+
+Only the source directory is renamed. Keep `datasets/paper6`, existing experiment
+names, logs and checkpoints unchanged. The plain Pi0.5 baseline lives separately
+in `scripts/paper6_pi05`; see its README for submission instructions.
+
 ## Audited split and conversion
 
 Source bottle handover is episodes 0–99. The six families occupy 100–699.
@@ -32,7 +47,7 @@ choose a fresh output for retries. There is no automatic overwrite or resume.
 After loading the existing training environment, from the training repo root:
 
 ```bash
-uv run --frozen python scripts/paper6/prepare_dataset.py \
+uv run --frozen python "$AEVLA_SCRIPTS"/prepare_dataset.py \
   --source dataset/multi_task_combined \
   --output "$PROJECT_WS/datasets/paper6/multi_task_combined" \
   --revision "$(cat "$PROJECT_WS/macg_data_revision.txt")"
@@ -48,11 +63,11 @@ data only. It does not train or start W&B. Example:
 
 ```bash
 mkdir -p "$PROJECT_WS/logs"
-bash -n scripts/paper6/prepare_norm.sh
+bash -n "$AEVLA_SCRIPTS"/prepare_norm.sh
 sbatch --export=ALL \
   --output="$PROJECT_WS/logs/paper6_prepare_%j.out" \
   --error="$PROJECT_WS/logs/paper6_prepare_%j.err" \
-  scripts/paper6/prepare_norm.sh
+  "$AEVLA_SCRIPTS"/prepare_norm.sh
 ```
 
 Default time limit is six hours, not a runtime guarantee. The prior seven-task
@@ -89,7 +104,7 @@ export FUTURE_DATASET_DIR="$FUTURE_DATA_ROOT/multi_task_combined"
 export FUTURE_ASSETS_DIR="$FUTURE_DATA_ROOT"
 export FUTURE_PI05_PARAMS="$PROJECT_WS/cache/openpi/openpi-assets/checkpoints/pi05_base/params"
 
-JAX_PLATFORMS=cpu uv run --frozen python scripts/paper6/check_training.py \
+JAX_PLATFORMS=cpu uv run --frozen python "$AEVLA_SCRIPTS"/check_training.py \
   --dataset "$FUTURE_DATASET_DIR" --check-config
 ```
 
@@ -130,11 +145,11 @@ invalid key/project permission must be resolved before a successful online run.
 
 ```bash
 mkdir -p "$PROJECT_WS/logs"
-bash -n scripts/paper6/train.sh
+bash -n "$AEVLA_SCRIPTS"/train.sh
 sbatch --export=ALL \
   --output="$PROJECT_WS/logs/train_paper6_%j.out" \
   --error="$PROJECT_WS/logs/train_paper6_%j.err" \
-  scripts/paper6/train.sh
+  "$AEVLA_SCRIPTS"/train.sh
 ```
 
 Record the returned job ID. Once allocated, validation and training start

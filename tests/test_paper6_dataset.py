@@ -6,9 +6,10 @@ from pathlib import Path
 import tempfile
 import unittest
 
-SPEC = importlib.util.spec_from_file_location(
-    "paper6_prepare", Path(__file__).resolve().parents[1] / "scripts/paper6/prepare_dataset.py"
-)
+SCRIPTS = Path(__file__).resolve().parents[1] / "scripts/paper6"
+if SCRIPTS.with_name("paper6_AE-VLA").is_dir():
+    SCRIPTS = SCRIPTS.with_name("paper6_AE-VLA")
+SPEC = importlib.util.spec_from_file_location("paper6_prepare", SCRIPTS / "prepare_dataset.py")
 MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
 
