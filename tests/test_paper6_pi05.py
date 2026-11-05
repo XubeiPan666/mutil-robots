@@ -63,6 +63,20 @@ class Pi05PreflightTests(unittest.TestCase):
     def test_matched_config_accepts_image_branch_override(self):
         self.assertEqual(self.check()["seed"], 42)
 
+    def test_explicit_separate_backbone_parameters(self):
+        reference_params = Path(self.tmp.name) / "pi05_params"
+        reference_params.mkdir()
+        self.ref.weight_loader.params_path = str(reference_params)
+        # Default still requires the same backbone for the original Pi0.5 run.
+        with self.assertRaisesRegex(ValueError, "base parameters"):
+            self.check()
+        self.assertEqual(CHECK.check_pair(self.cfg, self.ref, self.root, self.params,
+                                         reference_params=reference_params)["seed"], 42)
+        self.cfg.weight_loader.params_path = str(reference_params)
+        with self.assertRaisesRegex(ValueError, "base parameters"):
+            CHECK.check_pair(self.cfg, self.ref, self.root, self.params,
+                             reference_params=reference_params)
+
     def test_changed_delta_actions_rejected(self):
         self.cfg.data.data_transforms = replace(self.cfg.data.data_transforms, use_delta_joint_actions=False)
         with self.assertRaisesRegex(ValueError, "transforms differ"):

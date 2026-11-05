@@ -31,15 +31,16 @@ def load_dataset_checker():
     raise FileNotFoundError("Missing six-task dataset checker in paper6_AE-VLA or paper6")
 
 
-def check_pair(cfg, reference, root, params):
+def check_pair(cfg, reference, root, params, *, reference_params=None):
     """Fail closed if settings affecting the baseline comparison have drifted."""
     root, params = Path(root).resolve(), Path(params).resolve()
-    for candidate in (cfg, reference):
+    reference_params = params if reference_params is None else Path(reference_params).resolve()
+    for candidate, expected_params in ((cfg, params), (reference, reference_params)):
         require(Path(candidate.data.repo_id).resolve() == root, "Wrong six-task dataset")
         assets = Path(candidate.data.assets.assets_dir) / candidate.data.assets.asset_id
         require(assets.resolve() == root, "Wrong normalization assets")
-        require(Path(candidate.weight_loader.params_path).resolve() == params and params.is_dir(),
-                "Expected the cached Pi0.5 base parameters")
+        require(Path(candidate.weight_loader.params_path).resolve() == expected_params and expected_params.is_dir(),
+                "Expected the matching cached base parameters")
 
     expected = dict(seed=42, batch_size=32, num_train_steps=30000, num_workers=1, fsdp_devices=2)
     for name, value in expected.items():
