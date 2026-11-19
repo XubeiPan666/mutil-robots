@@ -20,11 +20,13 @@ from openpi.models.pi0_config import Pi0DiffusionForcingConfig
 from openpi.models.pi0_fast import Pi0FASTConfig
 from openpi.models.pi0_multi_agent_attn import Pi0MultiAgentAttnConfig
 from openpi.models.pi0_skill_lora_composer import Pi0SkillLoRAComposerConfig
+from openpi.models.pi05_intent_ar import Pi05IntentARConfig
 from openpi.training.weight_loaders import MultiAgentAttnWeightLoader
 from openpi.training.weight_loaders import Pi0SkillLoRAComposerWeightLoader
 import openpi.models.tokenizer as _tokenizer
 import openpi.policies.aloha_policy as aloha_policy
 import openpi.policies.droid_policy as droid_policy
+import openpi.policies.intent_ar_policy as intent_ar_policy
 import openpi.policies.libero_policy as libero_policy
 import openpi.policies.umi_policy as umi_policy
 import openpi.policies.so101_policy as so101_policy
@@ -661,6 +663,38 @@ class SimpleDataConfig(DataConfigFactory):
             data_transforms=self.data_transforms(model_config),
             model_transforms=self.model_transforms(model_config),
         )
+
+
+@dataclasses.dataclass(frozen=True)
+class IntentARDataTransforms(DroidMultiAgentTransformFactory):
+    def __call__(self, model_config):
+        return super().__call__(model_config).push(
+            inputs=[intent_ar_policy.PairInputs(model_config.action_horizon)],
+            outputs=[intent_ar_policy.JoinOutputs()],
+        )
+
+
+@dataclasses.dataclass(frozen=True)
+class IntentARModelTransforms(GroupFactory):
+    def __call__(self, model_config):
+        return _transforms.Group(
+            inputs=[
+                _transforms.ResizeImages(224, 224),
+                intent_ar_policy.TokenizePair(_tokenizer.PaligemmaTokenizer(model_config.max_token_len)),
+            ],
+            outputs=[intent_ar_policy.UnflattenPair()],
+        )
+
+
+@dataclasses.dataclass(frozen=True)
+class IntentARDataConfig(SimpleDataConfig):
+    def create(self, assets_dirs, model_config):
+        # Do not accidentally train with the old joint two-arm statistics.
+        from openpi.shared.intent_ar_assets import check_shared_stats
+
+        root = pathlib.Path(self.assets.assets_dir or assets_dirs) / self.assets.asset_id
+        check_shared_stats(root, pathlib.Path(self.repo_id), model_config.action_horizon)
+        return super().create(assets_dirs, model_config)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -3929,6 +3963,123 @@ _CONFIGS = [
         fsdp_devices=2,
     ),
 
+    # -------------------------------------------------------------------------
+    # Intent AR: matched single-arm ablations
+    # -------------------------------------------------------------------------
+    # R1: shared single-arm policy without communication.
+    TrainConfig(
+        name="pi05_intent_ar_r1_no_comm_fixed_order",
+        model=Pi05IntentARConfig(
+            pi05=True,
+            action_dim=32,
+            action_horizon=50,
+            max_token_len=200,
+            discrete_state_input=True,
+            communicate=False,
+            random_order=False,
+        ),
+        data=IntentARDataConfig(
+            repo_id=_paths.dataset_path("multi_task_combined"),
+            # Set FUTURE_INTENT_STATS_DIR to the completed single-arm statistics.
+            assets=AssetsConfig(assets_dir=_paths.dataset_path(""), asset_id="intent_ar_stats_REQUIRED"),
+            base_config=DataConfig(prompt_from_task=True),
+            data_transforms=IntentARDataTransforms(
+                use_delta_joint_actions=True,
+                model_type_override=_model.ModelType.PI05,
+            ),
+            model_transforms=IntentARModelTransforms(),
+        ),
+        weight_loader=weight_loaders.Pi05IntentARWeightLoader(_paths.pretrained_params("pi05")),
+        lr_schedule=_optimizer.CosineDecaySchedule(
+            warmup_steps=1000,
+            peak_lr=5e-5,
+            decay_steps=200000,
+            decay_lr=5e-5,
+        ),
+        num_train_steps=30000,
+        batch_size=32,
+        log_interval=50,
+        save_interval=5000,
+        keep_period=5000,
+        num_workers=1,
+        fsdp_devices=2,
+    ),
+    # R2: communication with a fixed agent order.
+    TrainConfig(
+        name="pi05_intent_ar_r2_comm_fixed_order",
+        model=Pi05IntentARConfig(
+            pi05=True,
+            action_dim=32,
+            action_horizon=50,
+            max_token_len=200,
+            discrete_state_input=True,
+            communicate=True,
+            random_order=False,
+        ),
+        data=IntentARDataConfig(
+            repo_id=_paths.dataset_path("multi_task_combined"),
+            # Set FUTURE_INTENT_STATS_DIR to the completed single-arm statistics.
+            assets=AssetsConfig(assets_dir=_paths.dataset_path(""), asset_id="intent_ar_stats_REQUIRED"),
+            base_config=DataConfig(prompt_from_task=True),
+            data_transforms=IntentARDataTransforms(
+                use_delta_joint_actions=True,
+                model_type_override=_model.ModelType.PI05,
+            ),
+            model_transforms=IntentARModelTransforms(),
+        ),
+        weight_loader=weight_loaders.Pi05IntentARWeightLoader(_paths.pretrained_params("pi05")),
+        lr_schedule=_optimizer.CosineDecaySchedule(
+            warmup_steps=1000,
+            peak_lr=5e-5,
+            decay_steps=200000,
+            decay_lr=5e-5,
+        ),
+        num_train_steps=30000,
+        batch_size=32,
+        log_interval=50,
+        save_interval=5000,
+        keep_period=5000,
+        num_workers=1,
+        fsdp_devices=2,
+    ),
+    # R3: communication with randomized agent order during training.
+    TrainConfig(
+        name="pi05_intent_ar_r3_comm_random_order",
+        model=Pi05IntentARConfig(
+            pi05=True,
+            action_dim=32,
+            action_horizon=50,
+            max_token_len=200,
+            discrete_state_input=True,
+            communicate=True,
+            random_order=True,
+        ),
+        data=IntentARDataConfig(
+            repo_id=_paths.dataset_path("multi_task_combined"),
+            # Set FUTURE_INTENT_STATS_DIR to the completed single-arm statistics.
+            assets=AssetsConfig(assets_dir=_paths.dataset_path(""), asset_id="intent_ar_stats_REQUIRED"),
+            base_config=DataConfig(prompt_from_task=True),
+            data_transforms=IntentARDataTransforms(
+                use_delta_joint_actions=True,
+                model_type_override=_model.ModelType.PI05,
+            ),
+            model_transforms=IntentARModelTransforms(),
+        ),
+        weight_loader=weight_loaders.Pi05IntentARWeightLoader(_paths.pretrained_params("pi05")),
+        lr_schedule=_optimizer.CosineDecaySchedule(
+            warmup_steps=1000,
+            peak_lr=5e-5,
+            decay_steps=200000,
+            decay_lr=5e-5,
+        ),
+        num_train_steps=30000,
+        batch_size=32,
+        log_interval=50,
+        save_interval=5000,
+        keep_period=5000,
+        num_workers=1,
+        fsdp_devices=2,
+    ),
 ]
 
 if len({config.name for config in _CONFIGS}) != len(_CONFIGS):
@@ -3966,6 +4117,15 @@ def get_config(config_name: str) -> TrainConfig:
                 data, assets=dataclasses.replace(data.assets, assets_dir=str(pathlib.Path(assets_dir).expanduser().resolve()))
             )
         config = dataclasses.replace(config, data=data)
+    if config_name.startswith("pi05_intent_ar_"):
+        shared_stats = os.environ.get("FUTURE_INTENT_STATS_DIR")
+        if shared_stats:
+            stats_path = pathlib.Path(shared_stats).expanduser().resolve()
+            config = dataclasses.replace(
+                config, data=dataclasses.replace(
+                    config.data, assets=AssetsConfig(assets_dir=str(stats_path.parent), asset_id=stats_path.name)
+                )
+            )
     foldtowel_params = os.environ.get("FUTURE_FOLDTOWEL_PARAMS")
     if foldtowel_params and config_name.startswith("pi05_bi_so100_flodtowel_pretrained"):
         config = dataclasses.replace(
