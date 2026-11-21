@@ -199,16 +199,28 @@ Production initialization is unchanged.
 
 `scripts/intent_ar/train.sh` accepts `r1`, `r2`, `r3`, or the corresponding full
 configuration name above. The configuration must be selected explicitly.
-It requests two A100 80GB GPUs, 32 CPUs and 24 hours, then uses the shared
-`scripts/train.py` entrypoint. The two GPUs shard the shared model; they are not
+It requests four A100 80GB GPUs, 64 CPUs and 24 hours, then uses the shared
+`scripts/train.py` entrypoint. The GPUs shard one shared model; they are not
 assigned one per arm. Slurm options may be overridden before the script path.
 
-Full training uses seed 42, batch 32, 30000 steps, one data worker, FSDP over two
-GPUs, and save/keep intervals of 5000. After the two-GPU batch-2 smoke run ran
-out of memory, `--smoke` was changed to batch 4, FSDP over four A100 80GB GPUs,
-and 20 steps with per-step logging; the final checkpoint is step 19. Submit the
-smoke mode with `--gres=gpu:a100:4` so the allocation matches the launcher. A
-successful smoke test does not establish that full batch 32 fits in GPU memory.
+R1/R2/R3 use LoRA rank 16 in the PaliGemma language transformer and rank 32 in
+the action expert. The SigLIP vision tower and original transformer weights are
+frozen; LoRA adapters, intent communication parameters, action projections and
+time MLPs remain trainable. EMA is disabled. Full training uses seed 42, global
+batch 32, 30000 steps, one data worker, FSDP over four GPUs, and save/keep
+intervals of 5000.
+
+All 600 episodes across the six task families are used for training. No
+train/validation episode split is applied. Existing shared single-arm statistics
+computed over all 600 episodes remain compatible, provided the dataset hashes,
+action horizon and transform checks pass. LoRA alone does not require recomputing
+normalization statistics.
+
+`--smoke` deliberately keeps the real global batch 32 and runs two steps. This
+is a memory-qualification job, not a cheap small-batch proxy. `--gpus 2|4`
+selects the FSDP shard count; the Slurm `--gres` request must match it. Start
+with four GPUs. A four-GPU smoke success validates four-GPU batch 32 only; run a
+separate two-GPU smoke before claiming the two-GPU configuration fits.
 
 Both modes require session `WANDB_API_KEY`, `WANDB_ENTITY` and `WANDB_PROJECT`.
 Do not put credentials in this script or commit them. W&B uploads training
@@ -231,23 +243,30 @@ Submission examples below actually enqueue jobs; run them only when ready,
 after setting the W&B variables. Replace `r3` with `r1` or `r2` as needed.
 
 ```bash
-# Short validation of real data, base weights, forward/backward and checkpoint saving.
+# Target-batch memory validation: four A100 80GB GPUs, global batch 32, two steps.
 sbatch --export=ALL --time=01:00:00 \
   --gres=gpu:a100:4 --cpus-per-task=64 \
   --output="$PROJECT_WS/logs/train_intent_ar_%j.out" \
   --error="$PROJECT_WS/logs/train_intent_ar_%j.err" \
-  scripts/intent_ar/train.sh r3 --smoke
+  scripts/intent_ar/train.sh r3 --smoke --gpus 4
 
-# Full training (GPU memory at batch 32 still needs validation).
+# Optional stricter two-GPU target-batch memory validation.
+sbatch --export=ALL --time=01:00:00 \
+  --gres=gpu:a100:2 --cpus-per-task=32 \
+  --output="$PROJECT_WS/logs/train_intent_ar_%j.out" \
+  --error="$PROJECT_WS/logs/train_intent_ar_%j.err" \
+  scripts/intent_ar/train.sh r3 --smoke --gpus 2
+
+# Full four-GPU training. Submit only after its smoke job completes.
 sbatch --export=ALL \
   --output="$PROJECT_WS/logs/train_intent_ar_%j.out" \
   --error="$PROJECT_WS/logs/train_intent_ar_%j.err" \
-  scripts/intent_ar/train.sh r3
+  scripts/intent_ar/train.sh r3 --gpus 4
 ```
 
 The launcher fixes the dataset to `$PROJECT_WS/datasets/paper6/multi_task_combined`
 and starts from the cached Pi0.5 base weights. It validates the selected shared
-statistics and requires two visible JAX GPUs in full mode or four in smoke mode. It does
+statistics and requires the selected number of visible JAX GPUs. It does
 not resume or overwrite earlier checkpoints. Experiments are named
 `<full-config-name>_paper6_<full-or-smoke>_<job-id>`; checkpoints live under
 `$PROJECT_WS/checkpoints/<full-config-name>/<experiment>/`.

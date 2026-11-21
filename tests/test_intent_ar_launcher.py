@@ -69,7 +69,7 @@ uv() {
     )
 
     def run(*args, overrides=None):
-        current = env | (overrides or {})
+        current = {**env, **(overrides or {})}
         result = subprocess.run(
             [BASH, shell_path(copied), *args],
             check=False,
@@ -86,17 +86,19 @@ uv() {
 
 @pytest.mark.parametrize("index", range(3))
 @pytest.mark.parametrize("smoke", [False, True])
-def test_select_config_and_training_mode(launch, index, smoke):
+@pytest.mark.parametrize("gpus", [2, 4])
+def test_select_config_and_training_mode(launch, index, smoke, gpus):
     selection = CONFIGS[index] if smoke else f"r{index + 1}"
-    result, args = launch(selection, *(["--smoke"] if smoke else []))
+    options = (["--smoke"] if smoke else []) + ["--gpus", str(gpus)]
+    result, args = launch(selection, *options)
     assert result.returncode == 0, result.stderr
     assert args[4] == CONFIGS[index]
     for flag, value in {
-        "--batch-size": "4" if smoke else "32",
-        "--num-train-steps": "20" if smoke else "30000",
-        "--save-interval": "20" if smoke else "5000",
-        "--keep-period": "20" if smoke else "5000",
-        "--fsdp-devices": "4" if smoke else "2",
+        "--batch-size": "32",
+        "--num-train-steps": "2" if smoke else "30000",
+        "--save-interval": "2" if smoke else "5000",
+        "--keep-period": "2" if smoke else "5000",
+        "--fsdp-devices": str(gpus),
         "--seed": "42",
     }.items():
         assert args[args.index(flag) + 1] == value
@@ -122,7 +124,10 @@ def test_failed_prerequisite_never_starts_training(launch, overrides):
     assert not args
 
 
-@pytest.mark.parametrize("args", [(), ("r4",), ("r3", "--overwrite"), ("r1", "--smoke", "extra")])
+@pytest.mark.parametrize(
+    "args",
+    [(), ("r4",), ("r3", "--overwrite"), ("r1", "--smoke", "extra"), ("r1", "--gpus", "3")],
+)
 def test_invalid_arguments_never_start_training(launch, args):
     result, calls = launch(*args)
     assert result.returncode == 2

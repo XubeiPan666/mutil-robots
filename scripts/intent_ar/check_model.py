@@ -38,6 +38,14 @@ def main():
                 "random_training_order": config.model.random_order,
                 "inference_order": config.model.inference_order,
                 "message_tokens": config.model.message_tokens,
+                "paligemma_variant": config.model.paligemma_variant,
+                "action_expert_variant": config.model.action_expert_variant,
+                "vision_tower_frozen": config.freeze_filter(
+                    ("PaliGemma", "img", "encoder", "kernel"), object()
+                ),
+                "ema_decay": config.ema_decay,
+                "fsdp_devices": config.fsdp_devices,
+                "global_batch_size": config.batch_size,
                 "per_arm_action_dim": config.model.action_dim,
                 "grouped_state_spec": observation.state.shape,
                 "grouped_action_spec": actions.shape,

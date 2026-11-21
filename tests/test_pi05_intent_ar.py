@@ -277,6 +277,7 @@ def test_base_loader_only_initializes_message_params(monkeypatch):
         "action_in_proj": {"kernel": np.ones((2, 2))},
         "intent_bos": np.zeros((2, 2)),
         "intent_projection": {"kernel": np.zeros((2, 2))},
+        "PaliGemma": {"llm": {"block": {"lora_a": np.zeros((2, 1))}}},
     }
     monkeypatch.setattr(weight_loaders.download, "maybe_download", lambda path: path)
     monkeypatch.setattr(
@@ -284,6 +285,7 @@ def test_base_loader_only_initializes_message_params(monkeypatch):
     )
     loaded = weight_loaders.Pi05IntentARWeightLoader("unused").load(params)
     np.testing.assert_array_equal(loaded["action_in_proj"]["kernel"], 3.0)
+    np.testing.assert_array_equal(loaded["PaliGemma"]["llm"]["block"]["lora_a"], 0.0)
     monkeypatch.setattr(weight_loaders._model, "restore_params", lambda *a, **k: {})
     with pytest.raises((ValueError, AssertionError)):
         weight_loaders.Pi05IntentARWeightLoader("unused").load(params)
@@ -303,3 +305,25 @@ def test_ablations_registered_without_changing_baseline():
     assert not isinstance(get_config("pi05_two_arms_multi_task").model, Pi05IntentARConfig)
     assert all(c.model.action_dim == 32 and c.batch_size == 32 and c.num_train_steps == 30000 for c in configs)
     assert all(c.save_interval == c.keep_period == 5000 for c in configs)
+    assert all(c.model.paligemma_variant == "gemma_2b_lora" for c in configs)
+    assert all(c.model.action_expert_variant == "gemma_300m_lora" for c in configs)
+    assert all(c.ema_decay is None and c.fsdp_devices == 4 for c in configs)
+
+
+def test_intent_lora_freezes_backbones_but_trains_adapters_and_new_modules():
+    config = Pi05IntentARConfig(
+        paligemma_variant="gemma_2b_lora",
+        action_expert_variant="gemma_300m_lora",
+    )
+    frozen = config.get_freeze_filter()
+    marker = object()
+    assert frozen(("PaliGemma", "img", "encoder", "kernel"), marker)
+    assert frozen(("PaliGemma", "llm", "layers", "attn", "w"), marker)
+    assert frozen(("PaliGemma", "llm", "layers", "attn_1", "w"), marker)
+    assert not frozen(("PaliGemma", "llm", "layers", "attn", "lora_a"), marker)
+    assert not frozen(("PaliGemma", "llm", "layers", "attn_1", "lora_b"), marker)
+    assert not frozen(("intent_projection", "kernel"), marker)
+    assert not frozen(("intent_bos",), marker)
+    assert not frozen(("action_in_proj", "kernel"), marker)
+    assert not frozen(("action_out_proj", "kernel"), marker)
+    assert not frozen(("time_mlp_in", "kernel"), marker)

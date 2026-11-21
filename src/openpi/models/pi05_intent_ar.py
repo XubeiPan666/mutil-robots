@@ -18,6 +18,7 @@ from openpi.models.pi0 import Pi0
 from openpi.models.pi0 import make_attn_mask
 from openpi.models.pi0_config import Pi0Config
 from openpi.shared import array_typing as at
+from openpi.shared import nnx_utils
 
 
 @dataclasses.dataclass(frozen=True)
@@ -40,6 +41,13 @@ class Pi05IntentARConfig(Pi0Config):
 
     def create(self, rng):
         return Pi05IntentAR(self, rngs=nnx.Rngs(rng))
+
+    def get_freeze_filter(self) -> nnx.filterlib.Filter:
+        """Freeze SigLIP plus the base weights replaced by LoRA adapters."""
+        return nnx.Any(
+            super().get_freeze_filter(),
+            nnx_utils.PathRegex(r".*PaliGemma/img/.*"),
+        )
 
     def inputs_spec(self, *, batch_size=1):
         obs, _ = super().inputs_spec(batch_size=batch_size)

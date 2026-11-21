@@ -4,8 +4,8 @@
 #SBATCH --constraint=a100_80
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=32
-#SBATCH --gres=gpu:a100:2
+#SBATCH --cpus-per-task=64
+#SBATCH --gres=gpu:a100:4
 #SBATCH --time=24:00:00
 
 # Shared launcher for the six-task R1/R2/R3 experiments. Submit manually.
@@ -13,13 +13,14 @@ set -eo pipefail
 
 usage() {
     cat <<'EOF'
-Usage: sbatch [Slurm options] scripts/intent_ar/train.sh CONFIG [--smoke]
+Usage: sbatch [Slurm options] scripts/intent_ar/train.sh CONFIG [--smoke] [--gpus 2|4]
 CONFIG: r1 | r2 | r3 (or the corresponding full config name)
   r1 = pi05_intent_ar_r1_no_comm_fixed_order
   r2 = pi05_intent_ar_r2_comm_fixed_order
   r3 = pi05_intent_ar_r3_comm_random_order
-Default: batch 32, FSDP 2, 30000 steps, save/keep every 5000 steps, W&B enabled.
---smoke: batch 4, FSDP 4, 20 steps, log every step; submit with 4 A100 GPUs.
+Default: batch 32, FSDP 4, 30000 steps, save/keep every 5000 steps, W&B enabled.
+--smoke: batch 32, 2 steps and per-step logging; validates the real target batch.
+--gpus: FSDP shard count. The sbatch --gres request must match this value.
 Required exported variables: FUTURE_INTENT_STATS_DIR, WANDB_API_KEY,
 WANDB_ENTITY, WANDB_PROJECT. Statistics must match the six-task dataset.
 Use bash scripts/intent_ar/train.sh --help to view help without Slurm.
@@ -36,25 +37,31 @@ esac
 shift
 MODE=full
 BATCH_SIZE=32
-FSDP_DEVICES=2
-EXPECTED_GPUS=2
+FSDP_DEVICES=4
+EXPECTED_GPUS=4
 TRAIN_STEPS=30000
 LOG_INTERVAL=50
 SAVE_INTERVAL=5000
 KEEP_PERIOD=5000
-if [[ $# -eq 1 && $1 == --smoke ]]; then
-    MODE=smoke
-    BATCH_SIZE=4
-    FSDP_DEVICES=4
-    EXPECTED_GPUS=4
-    TRAIN_STEPS=20
-    LOG_INTERVAL=1
-    SAVE_INTERVAL=20
-    KEEP_PERIOD=20
-elif [[ $# -ne 0 ]]; then
-    usage >&2
-    exit 2
-fi
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --smoke)
+            MODE=smoke
+            TRAIN_STEPS=2
+            LOG_INTERVAL=1
+            SAVE_INTERVAL=2
+            KEEP_PERIOD=2
+            shift
+            ;;
+        --gpus)
+            [[ ${2:-} == 2 || ${2:-} == 4 ]] || { usage >&2; exit 2; }
+            FSDP_DEVICES=$2
+            EXPECTED_GPUS=$2
+            shift 2
+            ;;
+        *) usage >&2; exit 2 ;;
+    esac
+done
 
 : "${SLURM_JOB_ID:?Submit with sbatch, not bash on a login node}"
 : "${FUTURE_INTENT_STATS_DIR:?Export the completed shared single-arm statistics directory}"
@@ -65,7 +72,7 @@ source "$(ws_find mutil-robots)/load_env.sh"
 export PYTHONNOUSERSITE=1
 export PYTHONUNBUFFERED=1
 unset JAX_PLATFORMS
-# Preserve Slurm's CUDA_VISIBLE_DEVICES; both arms share one model sharded over two GPUs.
+# Preserve Slurm's CUDA_VISIBLE_DEVICES; both arms share one model sharded over all requested GPUs.
 cd "$PROJECT_WS/code/mutil-robots"
 export FUTURE_DATA_ROOT="$PROJECT_WS/datasets/paper6"
 export FUTURE_DATASET_DIR="$FUTURE_DATA_ROOT/multi_task_combined"

@@ -3971,6 +3971,8 @@ _CONFIGS = [
         name="pi05_intent_ar_r1_no_comm_fixed_order",
         model=Pi05IntentARConfig(
             pi05=True,
+            paligemma_variant="gemma_2b_lora",
+            action_expert_variant="gemma_300m_lora",
             action_dim=32,
             action_horizon=50,
             max_token_len=200,
@@ -3990,6 +3992,10 @@ _CONFIGS = [
             model_transforms=IntentARModelTransforms(),
         ),
         weight_loader=weight_loaders.Pi05IntentARWeightLoader(_paths.pretrained_params("pi05")),
+        freeze_filter=Pi05IntentARConfig(
+            paligemma_variant="gemma_2b_lora",
+            action_expert_variant="gemma_300m_lora",
+        ).get_freeze_filter(),
         lr_schedule=_optimizer.CosineDecaySchedule(
             warmup_steps=1000,
             peak_lr=5e-5,
@@ -4002,13 +4008,16 @@ _CONFIGS = [
         save_interval=5000,
         keep_period=5000,
         num_workers=1,
-        fsdp_devices=2,
+        fsdp_devices=4,
+        ema_decay=None,
     ),
     # R2: communication with a fixed agent order.
     TrainConfig(
         name="pi05_intent_ar_r2_comm_fixed_order",
         model=Pi05IntentARConfig(
             pi05=True,
+            paligemma_variant="gemma_2b_lora",
+            action_expert_variant="gemma_300m_lora",
             action_dim=32,
             action_horizon=50,
             max_token_len=200,
@@ -4028,6 +4037,10 @@ _CONFIGS = [
             model_transforms=IntentARModelTransforms(),
         ),
         weight_loader=weight_loaders.Pi05IntentARWeightLoader(_paths.pretrained_params("pi05")),
+        freeze_filter=Pi05IntentARConfig(
+            paligemma_variant="gemma_2b_lora",
+            action_expert_variant="gemma_300m_lora",
+        ).get_freeze_filter(),
         lr_schedule=_optimizer.CosineDecaySchedule(
             warmup_steps=1000,
             peak_lr=5e-5,
@@ -4040,13 +4053,16 @@ _CONFIGS = [
         save_interval=5000,
         keep_period=5000,
         num_workers=1,
-        fsdp_devices=2,
+        fsdp_devices=4,
+        ema_decay=None,
     ),
     # R3: communication with randomized agent order during training.
     TrainConfig(
         name="pi05_intent_ar_r3_comm_random_order",
         model=Pi05IntentARConfig(
             pi05=True,
+            paligemma_variant="gemma_2b_lora",
+            action_expert_variant="gemma_300m_lora",
             action_dim=32,
             action_horizon=50,
             max_token_len=200,
@@ -4066,6 +4082,10 @@ _CONFIGS = [
             model_transforms=IntentARModelTransforms(),
         ),
         weight_loader=weight_loaders.Pi05IntentARWeightLoader(_paths.pretrained_params("pi05")),
+        freeze_filter=Pi05IntentARConfig(
+            paligemma_variant="gemma_2b_lora",
+            action_expert_variant="gemma_300m_lora",
+        ).get_freeze_filter(),
         lr_schedule=_optimizer.CosineDecaySchedule(
             warmup_steps=1000,
             peak_lr=5e-5,
@@ -4078,7 +4098,8 @@ _CONFIGS = [
         save_interval=5000,
         keep_period=5000,
         num_workers=1,
-        fsdp_devices=2,
+        fsdp_devices=4,
+        ema_decay=None,
     ),
 ]
 

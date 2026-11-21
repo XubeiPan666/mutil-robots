@@ -75,14 +75,16 @@ class Pi0SkillLoRAComposerWeightLoader(WeightLoader):
 
 @dataclasses.dataclass(frozen=True)
 class Pi05IntentARWeightLoader(WeightLoader):
-    """Initialize only the new message parameters; require every base Pi0.5 weight."""
+    """Initialize LoRA and message parameters; require every base Pi0.5 weight."""
 
     params_path: str
 
     def load(self, params: at.Params) -> at.Params:
         loaded = _model.restore_params(download.maybe_download(self.params_path), restore_type=np.ndarray)
         result = _merge_params(
-            loaded, params, missing_regex=r"(?:intent_bos|intent_projection)(?:/.*)?"
+            loaded,
+            params,
+            missing_regex=r"(?:.*lora.*|(?:intent_bos|intent_projection)(?:/.*)?)",
         )
         at.check_pytree_equality(expected=params, got=result, check_shapes=True, check_dtypes=False)
         return result
