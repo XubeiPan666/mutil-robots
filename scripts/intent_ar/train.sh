@@ -19,7 +19,7 @@ CONFIG: r1 | r2 | r3 (or the corresponding full config name)
   r2 = pi05_intent_ar_r2_comm_fixed_order
   r3 = pi05_intent_ar_r3_comm_random_order
 Default: batch 32, 30000 steps, save/keep every 5000 steps, W&B enabled.
---smoke: batch 2, 20 steps, log every step, separate experiment/checkpoint path.
+--smoke: batch 1, 20 steps, log every step, separate experiment/checkpoint path.
 Required exported variables: FUTURE_INTENT_STATS_DIR, WANDB_API_KEY,
 WANDB_ENTITY, WANDB_PROJECT. Statistics must match the six-task dataset.
 Use bash scripts/intent_ar/train.sh --help to view help without Slurm.
@@ -42,7 +42,7 @@ SAVE_INTERVAL=5000
 KEEP_PERIOD=5000
 if [[ $# -eq 1 && $1 == --smoke ]]; then
     MODE=smoke
-    BATCH_SIZE=2
+    BATCH_SIZE=1
     TRAIN_STEPS=20
     LOG_INTERVAL=1
     SAVE_INTERVAL=20

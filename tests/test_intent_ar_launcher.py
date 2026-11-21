@@ -92,7 +92,7 @@ def test_select_config_and_training_mode(launch, index, smoke):
     assert result.returncode == 0, result.stderr
     assert args[4] == CONFIGS[index]
     for flag, value in {
-        "--batch-size": "2" if smoke else "32",
+        "--batch-size": "1" if smoke else "32",
         "--num-train-steps": "20" if smoke else "30000",
         "--save-interval": "20" if smoke else "5000",
         "--keep-period": "20" if smoke else "5000",

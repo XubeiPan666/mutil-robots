@@ -204,7 +204,7 @@ It requests two A100 80GB GPUs, 32 CPUs and 24 hours, then uses the shared
 assigned one per arm. Slurm options may be overridden before the script path.
 
 Full training uses seed 42, batch 32, 30000 steps, one data worker, FSDP over two
-GPUs, and save/keep intervals of 5000. `--smoke` uses batch 2 and 20 steps with
+GPUs, and save/keep intervals of 5000. `--smoke` uses batch 1 and 20 steps with
 per-step logging; the final checkpoint is step 19. A successful smoke test does
 not establish that full batch 32 fits in GPU memory.
 
