@@ -204,9 +204,11 @@ It requests two A100 80GB GPUs, 32 CPUs and 24 hours, then uses the shared
 assigned one per arm. Slurm options may be overridden before the script path.
 
 Full training uses seed 42, batch 32, 30000 steps, one data worker, FSDP over two
-GPUs, and save/keep intervals of 5000. `--smoke` uses batch 1 and 20 steps with
-per-step logging; the final checkpoint is step 19. A successful smoke test does
-not establish that full batch 32 fits in GPU memory.
+GPUs, and save/keep intervals of 5000. After the two-GPU batch-2 smoke run ran
+out of memory, `--smoke` was changed to batch 4, FSDP over four A100 80GB GPUs,
+and 20 steps with per-step logging; the final checkpoint is step 19. Submit the
+smoke mode with `--gres=gpu:a100:4` so the allocation matches the launcher. A
+successful smoke test does not establish that full batch 32 fits in GPU memory.
 
 Both modes require session `WANDB_API_KEY`, `WANDB_ENTITY` and `WANDB_PROJECT`.
 Do not put credentials in this script or commit them. W&B uploads training
@@ -231,6 +233,7 @@ after setting the W&B variables. Replace `r3` with `r1` or `r2` as needed.
 ```bash
 # Short validation of real data, base weights, forward/backward and checkpoint saving.
 sbatch --export=ALL --time=01:00:00 \
+  --gres=gpu:a100:4 --cpus-per-task=64 \
   --output="$PROJECT_WS/logs/train_intent_ar_%j.out" \
   --error="$PROJECT_WS/logs/train_intent_ar_%j.err" \
   scripts/intent_ar/train.sh r3 --smoke
@@ -244,7 +247,7 @@ sbatch --export=ALL \
 
 The launcher fixes the dataset to `$PROJECT_WS/datasets/paper6/multi_task_combined`
 and starts from the cached Pi0.5 base weights. It validates the selected shared
-statistics and requires two visible JAX GPUs before starting training. It does
+statistics and requires two visible JAX GPUs in full mode or four in smoke mode. It does
 not resume or overwrite earlier checkpoints. Experiments are named
 `<full-config-name>_paper6_<full-or-smoke>_<job-id>`; checkpoints live under
 `$PROJECT_WS/checkpoints/<full-config-name>/<experiment>/`.

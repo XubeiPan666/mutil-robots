@@ -18,8 +18,8 @@ CONFIG: r1 | r2 | r3 (or the corresponding full config name)
   r1 = pi05_intent_ar_r1_no_comm_fixed_order
   r2 = pi05_intent_ar_r2_comm_fixed_order
   r3 = pi05_intent_ar_r3_comm_random_order
-Default: batch 32, 30000 steps, save/keep every 5000 steps, W&B enabled.
---smoke: batch 1, 20 steps, log every step, separate experiment/checkpoint path.
+Default: batch 32, FSDP 2, 30000 steps, save/keep every 5000 steps, W&B enabled.
+--smoke: batch 4, FSDP 4, 20 steps, log every step; submit with 4 A100 GPUs.
 Required exported variables: FUTURE_INTENT_STATS_DIR, WANDB_API_KEY,
 WANDB_ENTITY, WANDB_PROJECT. Statistics must match the six-task dataset.
 Use bash scripts/intent_ar/train.sh --help to view help without Slurm.
@@ -36,13 +36,17 @@ esac
 shift
 MODE=full
 BATCH_SIZE=32
+FSDP_DEVICES=2
+EXPECTED_GPUS=2
 TRAIN_STEPS=30000
 LOG_INTERVAL=50
 SAVE_INTERVAL=5000
 KEEP_PERIOD=5000
 if [[ $# -eq 1 && $1 == --smoke ]]; then
     MODE=smoke
-    BATCH_SIZE=1
+    BATCH_SIZE=4
+    FSDP_DEVICES=4
+    EXPECTED_GPUS=4
     TRAIN_STEPS=20
     LOG_INTERVAL=1
     SAVE_INTERVAL=20
@@ -100,18 +104,24 @@ cp "$FUTURE_INTENT_STATS_DIR/stats_manifest.json" "$RUN_DIR/stats_manifest.json"
 cp "$FUTURE_INTENT_STATS_DIR/norm_stats.json" "$RUN_DIR/norm_stats.json"
 sha256sum "$FUTURE_INTENT_STATS_DIR/norm_stats.json" > "$RUN_DIR/norm_stats.sha256"
 nvidia-smi
+export EXPECTED_GPUS
 uv run --frozen python - <<'PY'
+import os
 import jax
+
+expected = int(os.environ["EXPECTED_GPUS"])
 devices = jax.devices()
 print("JAX devices:", devices)
-assert len(devices) == 2 and all(d.platform == "gpu" for d in devices), "Expected two allocated GPUs"
+assert len(devices) == expected and all(d.platform == "gpu" for d in devices), (
+    f"Expected {expected} allocated GPUs, got {devices}"
+)
 PY
 
 # Start from Pi0.5 base. Do not resume or overwrite an earlier experiment.
 TRAIN_COMMAND=(uv run --frozen python scripts/train.py "$CONFIG"
     --exp-name "$EXP_NAME" --checkpoint-base-dir "$FUTURE_CHECKPOINT_ROOT"
     --seed 42 --batch-size "$BATCH_SIZE" --num-train-steps "$TRAIN_STEPS"
-    --num-workers 1 --fsdp-devices 2 --log-interval "$LOG_INTERVAL"
+    --num-workers 1 --fsdp-devices "$FSDP_DEVICES" --log-interval "$LOG_INTERVAL"
     --save-interval "$SAVE_INTERVAL" --keep-period "$KEEP_PERIOD"
     --wandb-enabled --project-name "$WANDB_PROJECT")
 printf '%q ' "${TRAIN_COMMAND[@]}" > "$RUN_DIR/train_command.txt"
